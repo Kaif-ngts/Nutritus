@@ -71,16 +71,16 @@ const getBlogById = async (id) => {
 };
 
 // UPDATE BLOG
-const updateBlog = async (id, payload) => {
+const updateBlog = async (id, payload, file) => {
   validateMongoId(id);
 
-  const { title, content, coverImage, category } = payload;
+  const { title, content, category } = payload;
 
   if (
     !title &&
     !content &&
-    coverImage === undefined &&
-    category === undefined
+    category === undefined &&
+    file.filename === undefined
   ) {
     const error = new Error("at least one field is required to update");
     error.statusCode = 400;
@@ -107,13 +107,13 @@ const updateBlog = async (id, payload) => {
     updateData.content = content.trim();
   }
 
-  if (coverImage !== undefined) {
-    if (coverImage !== null && typeof coverImage !== "string") {
+  if (file !== undefined) {
+    if (file.filename !== null && typeof file.filename !== "string") {
       const error = new Error("coverImage must be a string url or null");
       error.statusCode = 400;
       throw error;
     }
-    updateData.coverImage = coverImage;
+    updateData.coverImage = file ? `/uploads/blogs/${file.filename}` : null;
   }
 
   if (category !== undefined) {
