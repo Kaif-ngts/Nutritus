@@ -113,7 +113,7 @@ const updateBlog = async (id, payload) => {
       error.statusCode = 400;
       throw error;
     }
-    updateData.coverImage = coverImage;
+    updateData.coverImage = file ? `/uploads/blogs/${file.filename}` : null;
   }
 
   if (category !== undefined) {
