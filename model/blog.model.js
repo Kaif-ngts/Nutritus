@@ -21,8 +21,14 @@ const blogSchema = new mongoose.Schema(
     },
 
     coverImage: {
-      type: String,
-      default: null,
+      url: {
+        type: String,
+        default: null,
+      },
+      public_id: {
+        type: String,
+        default: null,
+      },
     },
   },
   {

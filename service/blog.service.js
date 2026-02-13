@@ -1,5 +1,7 @@
 const mongoose = require("mongoose");
 const Blog = require("../model/blog.model");
+const cloudinary = require("../config/cloudinary");
+const { uploadToCloudinary } = require("../utils/cloudinaryUpload");
 
 // helper: validate mongo id
 const validateMongoId = (id) => {
@@ -12,37 +14,36 @@ const validateMongoId = (id) => {
 
 // CREATE BLOG
 const createBlog = async (payload, file) => {
-  const { title, content, category, coverImage } = payload;
+  const { title, content, category } = payload;
 
-  if (!title || typeof title !== "string" || !title.trim()) {
-    const error = new Error("title is required and must be a string");
-    error.statusCode = 400;
-    throw error;
+  if (!title?.trim()) {
+    throw Object.assign(new Error("title is required"), { statusCode: 400 });
   }
 
-  if (!content || typeof content !== "string" || !content.trim()) {
-    const error = new Error("content is required and must be a string");
-    error.statusCode = 400;
-    throw error;
+  if (!content?.trim()) {
+    throw Object.assign(new Error("content is required"), { statusCode: 400 });
   }
 
-  if (!category || typeof category !== "string" || !category.trim()) {
-    const error = new Error("category is required and must be a string");
-    error.statusCode = 400;
-    throw error;
+  if (!category?.trim()) {
+    throw Object.assign(new Error("category is required"), { statusCode: 400 });
   }
 
-  if (coverImage && typeof coverImage !== "string") {
-    const error = new Error("coverImage must be a string url");
-    error.statusCode = 400;
-    throw error;
+  let imageData = { url: null, public_id: null };
+
+  if (file) {
+    const uploadResult = await uploadToCloudinary(file.buffer);
+
+    imageData = {
+      url: uploadResult.secure_url,
+      public_id: uploadResult.public_id,
+    };
   }
 
   const blog = await Blog.create({
     title: title.trim(),
     content: content.trim(),
     category: category.trim(),
-    coverImage: file ? `/uploads/blogs/${file.filename}` : null,
+    coverImage: imageData,
   });
 
   return blog;
@@ -51,6 +52,7 @@ const createBlog = async (payload, file) => {
 // GET ALL BLOGS
 const getAllBlogs = async () => {
   const blogs = await Blog.find().sort({ createdAt: -1 });
+  console.log(blogs);
 
   return blogs;
 };
@@ -74,84 +76,52 @@ const getBlogById = async (id) => {
 const updateBlog = async (id, payload, file) => {
   validateMongoId(id);
 
+  const blog = await Blog.findById(id);
+
+  if (!blog) {
+    throw Object.assign(new Error("blog not found"), { statusCode: 404 });
+  }
+
   const { title, content, category } = payload;
 
-  if (
-    !title &&
-    !content &&
-    category === undefined &&
-    file.filename === undefined
-  ) {
-    const error = new Error("at least one field is required to update");
-    error.statusCode = 400;
-    throw error;
-  }
+  if (title !== undefined) blog.title = title.trim();
+  if (content !== undefined) blog.content = content.trim();
+  if (category !== undefined) blog.category = category.trim();
 
-  const updateData = {};
+  if (file) {
+    // delete old image from cloudinary
 
-  if (title !== undefined) {
-    if (typeof title !== "string" || !title.trim()) {
-      const error = new Error("title must be a non-empty string");
-      error.statusCode = 400;
-      throw error;
+    if (blog.coverImage?.public_id) {
+      await cloudinary.uploader.destroy(blog.coverImage.public_id);
     }
-    updateData.title = title.trim();
+
+    const uploadResult = await uploadToCloudinary(file.buffer);
+
+    blog.coverImage = {
+      url: uploadResult.secure_url,
+      public_id: uploadResult.public_id,
+    };
   }
 
-  if (content !== undefined) {
-    if (typeof content !== "string" || !content.trim()) {
-      const error = new Error("content must be a non-empty string");
-      error.statusCode = 400;
-      throw error;
-    }
-    updateData.content = content.trim();
-  }
-
-  if (file !== undefined) {
-    if (file.filename !== null && typeof file.filename !== "string") {
-      const error = new Error("coverImage must be a string url or null");
-      error.statusCode = 400;
-      throw error;
-    }
-    updateData.coverImage = file ? `/uploads/blogs/${file.filename}` : null;
-  }
-
-  if (category !== undefined) {
-    if (typeof category !== "string" || !category.trim()) {
-      const error = new Error("category must be a non-empty string");
-      error.statusCode = 400;
-      throw error;
-    }
-    updateData.category = category.trim();
-  }
-
-  const updatedBlog = await Blog.findByIdAndUpdate(id, updateData, {
-    new: true,
-    runValidators: true,
-  });
-
-  if (!updatedBlog) {
-    const error = new Error("blog not found");
-    error.statusCode = 404;
-    throw error;
-  }
-
-  return updatedBlog;
+  await blog.save();
+  return blog;
 };
 
 // DELETE BLOG
 const deleteBlog = async (id) => {
   validateMongoId(id);
 
-  const deletedBlog = await Blog.findByIdAndDelete(id);
+  const blog = await Blog.findById(id);
 
-  if (!deletedBlog) {
-    const error = new Error("blog not found");
-    error.statusCode = 404;
-    throw error;
+  if (!blog) {
+    throw Object.assign(new Error("blog not found"), { statusCode: 404 });
   }
 
-  return true;
+  if (blog.coverImage?.public_id) {
+    await cloudinary.uploader.destroy(blog.coverImage.public_id);
+  }
+
+  await blog.deleteOne();
 };
 
 module.exports = {
