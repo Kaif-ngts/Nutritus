@@ -52,7 +52,6 @@ const createBlog = async (payload, file) => {
 // GET ALL BLOGS
 const getAllBlogs = async () => {
   const blogs = await Blog.find().sort({ createdAt: -1 });
-  console.log(blogs);
 
   return blogs;
 };
